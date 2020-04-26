@@ -50,24 +50,21 @@ OCCUPATION_FEMALE_PCT = {
     'secretary': 95
 }
 
-def load_dev_examples(path='winobias_data/', subjective_filter=False, verbose=False):
-    return load_examples(path, 'dev', subjective_filter, verbose)
+def load_dev_examples(path='winobias_data/', verbose=False):
+    return load_examples(path, 'dev', verbose)
 
-def load_test_examples(path='winobias_data/', subjective_filter=False, verbose=False):
-    return load_examples(path, 'test', subjective_filter, verbose)
+def load_test_examples(path='winobias_data/', verbose=False):
+    return load_examples(path, 'test', verbose)
 
-def load_examples(path, split, subjective_filter=False, verbose=False):
-    print(f'Split: {split.upper()}, Subjective Filter: {subjective_filter}')
+def load_examples(path, split, verbose=False):
+    print(f'Split: {split.upper()}')
     with open(os.path.join(path, 'female_occupations.txt')) as f:
         female_occupations = [row.lower().strip() for row in f]
     with open(os.path.join(path, 'male_occupations.txt')) as f:
         male_occupations = [row.lower().strip() for row in f]
     occupations = female_occupations + male_occupations
 
-    if subjective_filter:
-        fname = f'pro_stereotyped_type1.txt.{split}.subjectivefilter'
-    else:
-        fname = f'pro_stereotyped_type1.txt.{split}'
+    fname = f'pro_stereotyped_type1.txt.{split}'
 
     with open(os.path.join(path, fname)) as f:
         examples = []

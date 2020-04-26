@@ -21,9 +21,9 @@ from argparse import ArgumentParser, Namespace
 from copy import deepcopy
 
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from gpt2_attention import AttentionOverride
-from winogender_attn_intervention import get_interventions_winogender
-from winobias_attn_intervention import get_interventions_winobias
+from attention_intervention_model import AttentionOverride
+from attention_intervention_winogender import get_interventions_winogender
+from attention_intervention_winobias import get_interventions_winobias
 import winogender
 import winobias
 

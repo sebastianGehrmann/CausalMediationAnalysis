@@ -17,7 +17,7 @@ import statistics
 # import matplotlib.pyplot as plt
 from utils import batch, convert_results_to_pd
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from gpt2_attention import AttentionOverride
+from attention_intervention_model import AttentionOverride
 
 # sns.set(style="ticks", color_codes=True)
 
