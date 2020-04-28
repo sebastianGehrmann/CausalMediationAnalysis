@@ -69,7 +69,10 @@ def save_figures(data, source, model_version, filter, suffix, k=10):
     plt.legend((p3, p2[0], p1[0]), ('Total', 'Direct', 'Indirect'), loc='upper right', fontsize=11,
                bbox_to_anchor=(.99, 0.90))
     sns.despine()
-    plt.savefig(f'results/attention_intervention/stacked_bar_charts/{source}_{model_version}_{filter}_'
+    path = 'results/attention_intervention/stacked_bar_charts'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    plt.savefig(f'{path}/{source}_{model_version}_{filter}_'
                 f'{suffix}.pdf', format='pdf')
     plt.close()
     annot = False
@@ -83,7 +86,10 @@ def save_figures(data, source, model_version, filter, suffix, k=10):
         ax = sns.heatmap(mean_effect, rasterized=True, annot=annot, annot_kws={"size": 9}, fmt=".2f", square=True)
         ax.set(xlabel='Head', ylabel='Layer', title=f'Mean {effect_type.capitalize()} Effect')
         plt.figure(num=1, figsize=(7, 5))
-        plt.savefig(f'results/attention_intervention/heat_maps_{effect_type}/{source}_{model_version}_{filter}_'
+        path = f'results/attention_intervention/heat_maps_{effect_type}'
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(f'{path}/{source}_{model_version}_{filter}_'
                     f'{suffix}.pdf', format='pdf')
         plt.close()
 
@@ -96,7 +102,10 @@ def save_figures(data, source, model_version, filter, suffix, k=10):
         plt.figure(num=1, figsize=(5, 5))
         ax = sns.barplot(x=mean_effect, y=list(range(n_layers)), orient="h", color="#4472C4")
         ax.set(ylabel='Layer', title=f'Mean {effect_type.capitalize()} Effect')
-        plt.savefig(f'results/attention_intervention/layer_{effect_type}/{source}_{model_version}_{filter}_'
+        path = f'results/attention_intervention/layer_{effect_type}'
+        if not os.path.exists(path):
+            os.makedirs(path)
+        plt.savefig(f'{path}/{source}_{model_version}_{filter}_'
                     f'{suffix}.pdf', format='pdf')
         plt.close()
 
@@ -183,8 +192,10 @@ def save_figures(data, source, model_version, filter, suffix, k=10):
             ax2.spines['left'].set_visible(False)
             ax2.xaxis.set_ticks_position('bottom')
             ax2.axvline(0, linewidth=.85, color='black')
-            fname = f'results/attention_intervention/heat_maps_with_bar_{effect_type}{"_sorted" if do_sort else ""}/'\
-                    f'{source}_{model_version}_{filter}_{suffix}.pdf'
+            path = f'results/heat_maps_with_bar_{effect_type}{"_sorted" if do_sort else ""}'
+            if not os.path.exists(path):
+                os.makedirs(path)
+            fname = f'{path}/{source}_{model_version}_{filter}_{suffix}.pdf'
             plt.savefig(fname, format='pdf')
             plt.close()
 
@@ -192,7 +203,7 @@ def main():
     sns.set_context("paper")
     sns.set_style("white")
 
-    model_versions = ['distilgpt2', 'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl', 'gpt2_random']
+    model_versions = ['distilgpt2', 'gpt2', 'gpt2-medium', 'gpt2-large', 'gpt2-xl']
     filters = ['filtered', 'unfiltered']
 
     # For testing:

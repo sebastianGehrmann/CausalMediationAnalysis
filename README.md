@@ -1,6 +1,6 @@
 ## Mediation Analysis
 
-This repository contains the code to replicate the experiments for the paper "Causal Mediation Analysis for Interpreting Neural NLP: The Case of Gender Bias".
+This repository contains the code to replicate the experiments for the paper [Causal Mediation Analysis for Interpreting Neural NLP: The Case of Gender Bias](https://arxiv.org/abs/2004.12265).
 
 ### Neuron Experiments
 
@@ -18,7 +18,7 @@ Similarly, we provide two scripts `compute_neuron_split_total_effect` and `compu
 
 #### Create Analysis JSON files
 
-Note: the files for winogender are already available under the `winogender_data` directory.
+Note: the files for winogender are already available under the `winogender_data` directory. They were obtained from https://github.com/rudinger/winogender-schemas.
 
 For Winobias, you must first create a top-level `winobias_data` directory and download the contents of https://github.com/uclanlp/corefBias/tree/master/WinoBias/wino/data.
 

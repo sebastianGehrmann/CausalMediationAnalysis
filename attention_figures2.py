@@ -1,11 +1,15 @@
 """Creates summary figure of various effects for attention intervention from JSON file"""
 
 import json
-import numpy as np
-from matplotlib import pyplot as plt
+
 import matplotlib as mpl
-import seaborn as sns; sns.set()
+import numpy as np
+import seaborn as sns;
+from matplotlib import pyplot as plt
+
+sns.set()
 import pandas as pd
+import os
 
 def main():
 
@@ -75,7 +79,10 @@ def main():
         patch.set_y(-1)
     sns.despine()
     plt.subplots_adjust(left=0.08, right=0.99, top=0.99, bottom=0.15)
-    plt.savefig(f'results/attention_intervention/effects.pdf', format='pdf')
+    path = 'results/attention_intervention/'
+    if not os.path.exists(path):
+        os.makedirs(path)
+    plt.savefig(f'{path}effects.pdf', format='pdf')
     plt.close()
 
 if __name__ == '__main__':
