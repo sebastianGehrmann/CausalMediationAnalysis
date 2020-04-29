@@ -1,0 +1,4 @@
+wget https://raw.githubusercontent.com/uclanlp/corefBias/master/WinoBias/wino/data/pro_stereotyped_type1.txt.dev -O winobias_data/pro_stereotyped_type1.txt.dev &&
+wget https://raw.githubusercontent.com/uclanlp/corefBias/master/WinoBias/wino/data/pro_stereotyped_type1.txt.test -O winobias_data/pro_stereotyped_type1.txt.test &&
+wget https://raw.githubusercontent.com/uclanlp/corefBias/master/WinoBias/wino/data/female_occupations.txt -O winobias_data/female_occupations.txt &&
+wget https://raw.githubusercontent.com/uclanlp/corefBias/master/WinoBias/wino/data/male_occupations.txt -O winobias_data/male_occupations.txt

@@ -20,7 +20,7 @@ Similarly, we provide two scripts `compute_neuron_split_total_effect` and `compu
 
 Note: the files for winogender are already available under the `winogender_data` directory. They were obtained from https://github.com/rudinger/winogender-schemas.
 
-For Winobias, you must first create a top-level `winobias_data` directory and download the contents of https://github.com/uclanlp/corefBias/tree/master/WinoBias/wino/data.
+For Winobias, you must first download the data by running the `download_winobias_data` script.
 
 You can run the attention intervention experiments for a specific configuration by running either the `attention_intervention_winobias.py` or `attention_intervention_winogender.py` scripts. The arguments are specified in the respective script in the `intervene_attention` method. See `attention_intervention_winobias.sh` or  `attention_intervention_winogender.sh` for all possible configurations. The results will be written to the `winobias_data/` or `winogender_data/` directory.
 
