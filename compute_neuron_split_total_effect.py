@@ -7,7 +7,7 @@ import sys
 def main(folder_name="results/20191114_neuron_intervention/", model_name="distilgpt2"):
 
     profession_stereotypicality = {}
-    with open("professions.json") as f:
+    with open("experiment_data/professions.json") as f:
         for l in f:
             for p in eval(l):
                 profession_stereotypicality[p[0]] = {
