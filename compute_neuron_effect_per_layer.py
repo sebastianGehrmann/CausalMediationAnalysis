@@ -1,7 +1,7 @@
 """Script to generate a plot with effect per-layer.
 
 Requirement:
-You have to have run `compute_neuron_effect_per_layer.py` for each of the models you want
+You have to have run `compute_and_save_neuron_agg_effect.py` for each of the models you want
 to investigate. That script will save an intermediate result csv. To reduce computational
 overhead, this file expects those intermediate result files.
 """
