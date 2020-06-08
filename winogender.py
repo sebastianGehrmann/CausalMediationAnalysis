@@ -1,6 +1,7 @@
-import os
 import csv
 import inspect
+import os
+
 from experiment import Intervention
 
 

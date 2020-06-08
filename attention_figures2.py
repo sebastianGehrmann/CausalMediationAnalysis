@@ -4,7 +4,7 @@ import json
 
 import matplotlib as mpl
 import numpy as np
-import seaborn as sns;
+import seaborn as sns
 from matplotlib import pyplot as plt
 
 sns.set()

@@ -1,13 +1,14 @@
 """Creates figures showing attention for specific examples, based on JSON files"""
 
 import json
+import math
+from operator import itemgetter
+
+import numpy as np
 import seaborn as sns
 import torch
 from matplotlib import pyplot as plt
 from transformers import GPT2Model, GPT2Tokenizer
-from operator import itemgetter
-import math
-import numpy as np
 
 BLACK = '#000000'
 GRAY = '#303030'

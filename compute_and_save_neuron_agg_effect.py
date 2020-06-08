@@ -6,8 +6,9 @@ Usage:
     python compute_and_save_neuron_agg_effect.py $result_file_path $model_name
 """
 import os
-import pandas as pd
 import sys
+
+import pandas as pd
 
 
 def analyze_effect_results(results_df, effect, word, alt, savefig=None):

@@ -1,25 +1,16 @@
 
-import torch
-# import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-# import random
-from functools import partial
-from tqdm import tqdm
-# from tqdm import tqdm_notebook
 import math
 import statistics
+from functools import partial
 
-# from collections import Counter, defaultdict
-
-# import pandas as pd
-# import seaborn as sns
-# import matplotlib.pyplot as plt
-from utils import batch, convert_results_to_pd
+import numpy as np
+import torch
+import torch.nn.functional as F
+from tqdm import tqdm
 from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from attention_intervention_model import AttentionOverride
 
-# sns.set(style="ticks", color_codes=True)
+from attention_intervention_model import AttentionOverride
+from utils import batch, convert_results_to_pd
 
 np.random.seed(1)
 torch.manual_seed(1)

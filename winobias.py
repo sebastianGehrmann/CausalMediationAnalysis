@@ -1,10 +1,12 @@
-import os
 import inspect
+import os
 import re
+
+import pandas as pd
 from tqdm import tqdm
 from transformers import GPT2Tokenizer
+
 from experiment import Model, Intervention
-import pandas as pd
 
 # Stats from https://arxiv.org/pdf/1804.06876.pdf, Table 1
 OCCUPATION_FEMALE_PCT = {

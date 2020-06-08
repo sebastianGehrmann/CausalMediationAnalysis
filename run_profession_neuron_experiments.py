@@ -2,12 +2,13 @@
 """
 import argparse
 import os
-import torch
-
 from datetime import datetime
-from utils import convert_results_to_pd
-from experiment import Intervention, Model
+
+import torch
 from transformers import GPT2Tokenizer
+
+from experiment import Intervention, Model
+from utils import convert_results_to_pd
 
 parser = argparse.ArgumentParser(description="Run a set of neuron experiments.")
 

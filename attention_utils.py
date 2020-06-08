@@ -1,8 +1,9 @@
 """Collection of utilities for attention intervention"""
 
-import torch
 import matplotlib.pyplot as plt
-import seaborn as sns; sns.set()
+import seaborn as sns;sns.set()
+import torch
+
 from tqdm import tqdm
 import pandas as pd
 import numpy as np

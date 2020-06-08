@@ -6,12 +6,13 @@ to investigate. That script will save an intermediate result csv. To reduce comp
 overhead, this file expects those intermediate result files.
 """
 
+import os
+import sys
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import pandas as pd
 import seaborn as sns
-import sys
 
 sns.set_context("talk")
 sns.set_style("whitegrid")

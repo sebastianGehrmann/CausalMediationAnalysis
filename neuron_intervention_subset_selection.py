@@ -1,28 +1,18 @@
 # -*- coding: utf-8 -*-
-from datetime import datetime
 
-import torch
-# import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-# import random
-from functools import partial
-from tqdm import tqdm # tqdm_notebook as tqdm
-# from tqdm import tqdm_notebook
-import math
-import os
-import sys
-import pandas as pd
-import statistics
-import random
-import pickle 
-import matplotlib.pyplot as plt
-from argparse import ArgumentParser, Namespace
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-import dask.dataframe as dd
 import gc
+import os
+import pickle
+import random
+from argparse import ArgumentParser
+
+import numpy as np
+import pandas as pd
+import torch
+from transformers import GPT2Tokenizer
+
 from experiment import Intervention, Model
-from utils import batch, convert_results_to_pd
+from utils import convert_results_to_pd
 
 np.random.seed(1)
 torch.manual_seed(1)

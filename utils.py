@@ -1,5 +1,6 @@
-import pandas as pd
 from copy import deepcopy
+
+import pandas as pd
 
 
 def batch(iterable, bsize=1):

@@ -1,35 +1,17 @@
-from datetime import datetime
-
-import torch
-# import torch.nn as nn
-import torch.nn.functional as F
-import numpy as np
-# import random
-from functools import partial
-from tqdm import tqdm # tqdm_notebook as tqdm
-# from tqdm import tqdm_notebook
-import math
 import os
-import sys
+import pickle
+from argparse import ArgumentParser
+
+import numpy as np
 import pandas as pd
-from pandas import DataFrame
-import statistics
-import random
-import pickle 
-import matplotlib.pyplot as plt
-from argparse import ArgumentParser, Namespace
-from copy import deepcopy
+import torch
+from tqdm import tqdm  # tqdm_notebook as tqdm
+from transformers import GPT2Tokenizer
 
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
-from attention_intervention_model import AttentionOverride
-from attention_intervention_winogender import get_interventions_winogender
 from attention_intervention_winobias import get_interventions_winobias
-import winogender
-import winobias
-
-from attention_utils import perform_interventions, get_odds_ratio
+from attention_intervention_winogender import get_interventions_winogender
+from attention_utils import perform_interventions
 from experiment import Model
-import json
 
 np.random.seed(1)
 torch.manual_seed(1)

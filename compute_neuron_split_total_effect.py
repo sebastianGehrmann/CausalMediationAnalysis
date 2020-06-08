@@ -1,7 +1,8 @@
-import numpy as np
 import os
-import pandas as pd
 import sys
+
+import numpy as np
+import pandas as pd
 
 
 def main(folder_name="results/20191114_neuron_intervention/", model_name="distilgpt2"):
