@@ -117,9 +117,13 @@ def main(folder_name="results/20191114_neuron_intervention/", model_name="distil
 
     # Compute Extra Info
     def get_profession(s):
+        # Discard PADDING TEXT used in XLNet
+        if model_name.startswith('xlnet'): s = s.split('<eos>')[-1]
         return s.split()[1]
 
     def get_template(s):
+        # Discard PADDING TEXT used in XLNet
+        if model_name.startswith('xlnet'): s = s.split('<eos>')[-1]
         initial_string = s.split()
         initial_string[1] = "_"
         return " ".join(initial_string)
