@@ -123,7 +123,12 @@ def run_all(
     templates = get_template_list(template_indices)
     intervention_types = get_intervention_types()
     # Initialize Model and Tokenizer.
-    tokenizer = GPT2Tokenizer.from_pretrained(model_type)
+    tokenizer = (GPT2Tokenizer if model.is_gpt2 else
+                 TransfoXLTokenizer if model.is_txl else
+                 XLNetTokenizer if model.is_xlnet else
+                 BertTokenizer if model.is_bert else
+                 DistilBertTokenizer if model.is_distilbert else
+                 RobertaTokenizer).from_pretrained(model_type)
     model = Model(device=device, gpt2_version=model_type, random_weights=random_weights)
 
     # Set up folder if it does not exist.
