@@ -68,6 +68,10 @@ def intervene_attention(gpt2_version, do_filter, stat, device='cuda',
     if random_weights:
         gpt2_version += '_random'
     fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
+    if model.is_gpt2 or model.is_txl or model.is_xlnet:
+        fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
+    else:
+        fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}_{masking_approach}.json"
     json_data['results'] = results
     with open(fname, 'w') as f:
         json.dump(json_data, f)
