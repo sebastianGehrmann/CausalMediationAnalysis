@@ -249,7 +249,10 @@ class Model():
             if len(c) > 1:
                 raise ValueError(f"Multiple tokens not allowed: {c}")
         outputs = [c[0] for c in candidates]
-        logits, past = self.model(context)[:2]
+        if self.is_xlnet:
+            logits = self.xlnet_forward(context, clen=1)[0]
+        else:
+            logits = self.model(context)[0]
         logits = logits[:, -1, :]
         probs = F.softmax(logits, dim=-1)
         return probs[:, outputs].tolist()
