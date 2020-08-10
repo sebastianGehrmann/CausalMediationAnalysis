@@ -39,23 +39,49 @@ class Intervention():
         super()
         self.device = device
         self.enc = tokenizer
+
+        if isinstance(tokenizer, XLNetTokenizer):
+            # Padding text for XLNet (from examples/text-generation/run_generation.py)
+            PADDING_TEXT = """In 1991, the remains of Russian Tsar Nicholas II and his family
+            (except for Alexei and Maria) are discovered.
+            The voice of Nicholas's young son, Tsarevich Alexei Nikolaevich, narrates the
+            remainder of the story. 1883 Western Siberia,
+            a young Grigori Rasputin is asked by his father and a group of men to perform magic.
+            Rasputin has a vision and denounces one of the men as a horse thief. Although his
+            father initially slaps him for making such an accusation, Rasputin watches as the
+            man is chased outside and beaten. Twenty years later, Rasputin sees a vision of
+            the Virgin Mary, prompting him to become a priest. Rasputin quickly becomes famous,
+            with people, even a bishop, begging for his blessing. <eod> </s> <eos>"""
+            base_string = PADDING_TEXT + ' ' + base_string
+
         # All the initial strings
         # First item should be neutral, others tainted
         self.base_strings = [base_string.format(s)
                              for s in substitutes]
         # Tokenized bases
-        self.base_strings_tok = [self.enc.encode(s)
-                                 for s in self.base_strings]
+        self.base_strings_tok = [
+            self.enc.encode(s,
+                            add_special_tokens=False,
+                            add_space_before_punct_symbol=True)
+            for s in self.base_strings
+        ]
         # print(self.base_strings_tok)
         self.base_strings_tok = torch.LongTensor(self.base_strings_tok)\
                                      .to(device)
         # Where to intervene
-        self.position = base_string.split().index('{}')
+        if isinstance(tokenizer, XLNetTokenizer):
+            diff = len(base_string.split()) - base_string.split().index('{}')
+            self.position = len(self.base_strings_tok[0]) - diff
+            assert len(self.base_strings_tok[0]) == len(self.base_strings_tok[1])
+        else:
+            self.position = base_string.split().index('{}')
 
         self.candidates = []
         for c in candidates:
-            # '. ' added to input so that tokenizer understand that first word follows a space.
-            tokens = self.enc.tokenize('. ' + c)[1:]
+            # 'a ' added to input so that tokenizer understand that first word follows a space.
+            tokens = self.enc.tokenize(
+                'a ' + c,
+                add_space_before_punct_symbol=True)[1:]
             self.candidates.append(tokens)
 
         self.candidates_tok = [self.enc.convert_tokens_to_ids(tokens)
