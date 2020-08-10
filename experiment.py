@@ -7,9 +7,19 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import (
+    GPT2LMHeadModel, GPT2Tokenizer,
+    TransfoXLLMHeadModel, TransfoXLTokenizer,
+    XLNetLMHeadModel, XLNetTokenizer,
+    BertForMaskedLM, BertTokenizer,
+    DistilBertForMaskedLM, DistilBertTokenizer,
+    RobertaForMaskedLM, RobertaTokenizer
+)
 
-from attention_intervention_model import AttentionOverride
+from attention_intervention_model import (
+    AttentionOverride, TXLAttentionOverride, XLNetAttentionOverride,
+    BertAttentionOverride, DistilBertAttentionOverride
+)
 from utils import batch, convert_results_to_pd
 
 np.random.seed(1)
