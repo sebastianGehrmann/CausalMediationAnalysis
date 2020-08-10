@@ -659,15 +659,29 @@ class Model():
             input = x  # Get attention for x
         else:
             raise ValueError(f"Invalid effect: {effect}")
-        batch = torch.tensor(input).unsqueeze(0).to(self.device)
-        attention_override = self.model(batch)[-1]
+        if self.is_bert or self.is_distilbert or self.is_roberta:
+            attention_override = []
+            input = input.tolist()
+            for candidate in intervention.candidates_tok:
+                mlm_inputs = self.mlm_inputs(input, candidate)
+                for i, c in enumerate(candidate):
+                    combined, _ = mlm_inputs[i]
+                    batch = torch.tensor(combined).unsqueeze(0).to(self.device)
+                    attention_override.append(self.model(batch)[-1])
+        elif self.is_xlnet:
+            batch = input.clone().detach().unsqueeze(0).to(self.device)
+            target_mapping = torch.zeros(
+                (1, 1, len(input)), dtype=torch.float, device=self.device)
+            attention_override = self.model(
+                batch, target_mapping=target_mapping)[-1]
+        else:
+            batch = input.clone().detach().unsqueeze(0).to(self.device)
+            attention_override = self.model(batch)[-1]
 
         batch_size = 1
         seq_len = len(x)
         seq_len_alt = len(x_alt)
         assert seq_len == seq_len_alt
-        assert len(attention_override) == self.num_layers
-        assert attention_override[0].shape == (batch_size, self.num_heads, seq_len, seq_len)
 
         with torch.no_grad():
 
@@ -684,8 +698,15 @@ class Model():
             # Intervene at every layer and head by overlaying attention induced by x_alt
             model_attn_override_data = [] # Save layer interventions for model-level intervention later
             for layer in range(self.num_layers):
-                layer_attention_override = attention_override[layer]
-                attention_override_mask = torch.ones_like(layer_attention_override, dtype=torch.uint8)
+                if self.is_bert or self.is_distilbert or self.is_roberta:
+                    layer_attention_override = [a[layer] for a in attention_override]
+                    attention_override_mask = [torch.ones_like(l, dtype=torch.uint8) for l in layer_attention_override]
+                elif self.is_xlnet:
+                    layer_attention_override = attention_override[layer]
+                    attention_override_mask = torch.ones_like(layer_attention_override[0], dtype=torch.uint8)
+                else:
+                    layer_attention_override = attention_override[layer]
+                    attention_override_mask = torch.ones_like(layer_attention_override, dtype=torch.uint8)
                 layer_attn_override_data = [{
                     'layer': layer,
                     'attention_override': layer_attention_override,
@@ -697,8 +718,16 @@ class Model():
                     attn_override_data = layer_attn_override_data)
                 model_attn_override_data.extend(layer_attn_override_data)
                 for head in range(self.num_heads):
-                    attention_override_mask = torch.zeros_like(layer_attention_override, dtype=torch.uint8)
-                    attention_override_mask[0][head] = 1 # Set mask to 1 for single head only
+                    if self.is_bert or self.is_distilbert or self.is_roberta:
+                        attention_override_mask = [torch.zeros_like(l, dtype=torch.uint8)
+                                                   for l in layer_attention_override]
+                        for a in attention_override_mask: a[0][head] = 1
+                    elif self.is_xlnet:
+                        attention_override_mask = torch.zeros_like(layer_attention_override[0], dtype=torch.uint8)
+                        attention_override_mask[0][head] = 1
+                    else:
+                        attention_override_mask = torch.zeros_like(layer_attention_override, dtype=torch.uint8)
+                        attention_override_mask[0][head] = 1 # Set mask to 1 for single head only
                     head_attn_override_data = [{
                         'layer': layer,
                         'attention_override': layer_attention_override,
