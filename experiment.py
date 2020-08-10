@@ -326,12 +326,14 @@ class Model():
                               neurons,
                               intervention,
                               intervention_type):
+            # XLNet: ignore the query stream
+            if self.is_xlnet and output.shape[0] == 1: return output
             # Get the neurons to intervene on
             neurons = torch.LongTensor(neurons).to(self.device)
             # First grab the position across batch
             # Then, for each element, get correct index w/ gather
-            base = output[:, position, :].gather(
-                1, neurons)
+            base_slice = self.order_dims((slice(None), position, slice(None)))
+            base = output[base_slice].gather(1, neurons)
             intervention_view = intervention.view_as(base)
 
             if intervention_type == 'replace':
@@ -342,9 +344,9 @@ class Model():
                 raise ValueError(f"Invalid intervention_type: {intervention_type}")
             # Overwrite values in the output
             # First define mask where to overwrite
-            scatter_mask = torch.zeros_like(output).byte()
+            scatter_mask = torch.zeros_like(output, dtype=torch.uint8)
             for i, v in enumerate(neurons):
-                scatter_mask[i, position, v] = 1
+                scatter_mask[self.order_dims((i, position, v))] = 1
             # Then take values from base and scatter
             output.masked_scatter_(scatter_mask, base.flatten())
 
@@ -353,34 +355,31 @@ class Model():
         context = context.unsqueeze(0).repeat(batch_size, 1)
         handle_list = []
         for layer in set(layers):
-          neuron_loc = np.where(np.array(layers) == layer)[0]
-          n_list = []
-          for n in neurons:
-            unsorted_n_list = [n[i] for i in neuron_loc]
-            n_list.append(list(np.sort(unsorted_n_list)))
-          intervention_rep = alpha * rep[layer][n_list]
-          if layer == -1:
-              wte_intervention_handle = self.model.transformer.wte.register_forward_hook(
-                  partial(intervention_hook,
-                          position=position,
-                          neurons=n_list,
-                          intervention=intervention_rep,
-                          intervention_type=intervention_type))
-              handle_list.append(wte_intervention_handle)
-          else:
-              mlp_intervention_handle = self.model.transformer.h[layer]\
-                                            .mlp.register_forward_hook(
-                  partial(intervention_hook,
-                          position=position,
-                          neurons=n_list,
-                          intervention=intervention_rep,
-                          intervention_type=intervention_type))
-              handle_list.append(mlp_intervention_handle)
+            neuron_loc = np.where(np.array(layers) == layer)[0]
+            n_list = []
+            for n in neurons:
+                unsorted_n_list = [n[i] for i in neuron_loc]
+                n_list.append(list(np.sort(unsorted_n_list)))
+            intervention_rep = alpha * rep[layer][n_list]
+            if layer == -1:
+                handle_list.append(self.word_emb_layer.register_forward_hook(
+                    partial(intervention_hook,
+                            position=position,
+                            neurons=n_list,
+                            intervention=intervention_rep,
+                            intervention_type=intervention_type)))
+            else:
+                handle_list.append(self.neuron_layer(layer).register_forward_hook(
+                    partial(intervention_hook,
+                            position=position,
+                            neurons=n_list,
+                            intervention=intervention_rep,
+                            intervention_type=intervention_type)))
         new_probabilities = self.get_probabilities_for_examples(
             context,
             outputs)
         for hndle in handle_list:
-          hndle.remove()
+            hndle.remove()
         return new_probabilities
 
     def head_pruning_intervention(self,
