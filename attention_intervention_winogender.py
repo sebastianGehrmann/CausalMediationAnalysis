@@ -67,7 +67,6 @@ def intervene_attention(gpt2_version, do_filter, stat, device='cuda',
     filter_name = 'filtered' if do_filter else 'unfiltered'
     if random_weights:
         gpt2_version += '_random'
-    fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
     if model.is_gpt2 or model.is_txl or model.is_xlnet:
         fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
     else:
