@@ -214,26 +214,30 @@ class Model():
                                         position,
                                         representations,
                                         layer):
-            representations[layer] = output[0][position]
+            # XLNet: ignore the query stream
+            if self.is_xlnet and output.shape[0] == 1: return output
+            representations[layer] = output[self.order_dims((0, position))]
         handles = []
         representation = {}
         with torch.no_grad():
             # construct all the hooks
             # word embeddings will be layer -1
-            handles.append(self.model.transformer.wte.register_forward_hook(
-                    partial(extract_representation_hook,
-                            position=position,
-                            representations=representation,
-                            layer=-1)))
+            handles.append(self.word_emb_layer.register_forward_hook(
+                partial(extract_representation_hook,
+                        position=position,
+                        representations=representation,
+                        layer=-1)))
             # hidden layers
             for layer in range(self.num_layers):
-                handles.append(self.model.transformer.h[layer]\
-                                   .mlp.register_forward_hook(
+                handles.append(self.neuron_layer(layer).register_forward_hook(
                     partial(extract_representation_hook,
                             position=position,
                             representations=representation,
                             layer=layer)))
-            logits, past = self.model(context)
+            if self.is_xlnet:
+                self.xlnet_forward(context.unsqueeze(0), clen=1)
+            else:
+                self.model(context.unsqueeze(0))
             for h in handles:
                 h.remove()
         # print(representation[0][:5])
