@@ -175,6 +175,37 @@ class Model():
             self.word_emb_layer = self.model.roberta.embeddings.word_embeddings
             self.neuron_layer = lambda layer: self.model.roberta.encoder.layer[layer].output
 
+    def mlm_inputs(self, context, candidate):
+        """ Return input_tokens for the masked LM sampling scheme """
+        input_tokens = []
+        for i in range(len(candidate)):
+            combined = context + candidate[:i] + [self.st_ids[0]]
+            if self.masking_approach in [2, 5]:
+                combined = combined + candidate[i+1:]
+            elif self.masking_approach in [3, 6]:
+                combined = combined + [self.st_ids[0]] * len(candidate[i+1:])
+            if self.masking_approach > 3:
+                combined = [self.st_ids[1]] + combined + [self.st_ids[2]]
+            pred_idx = combined.index(self.st_ids[0])
+            input_tokens.append((combined, pred_idx))
+        return input_tokens
+
+    def xlnet_forward(self, batch, clen):
+        """ Return the outputs of XLNet's forward pass;
+            clen = length of the candidate """
+        bsz, seqlen = batch.shape
+        perm_mask = torch.triu(
+            torch.ones((bsz, seqlen, seqlen), device=self.device), diagonal=0)
+        perm_mask[:, :, :-clen] = 0
+        if self.masking_approach == 2:
+            perm_mask[:, -clen:, -clen:] = torch.eye(clen)
+        target_mapping = torch.zeros(
+            (bsz, clen, seqlen), dtype=torch.float, device=self.device)
+        target_mapping[:, :, -clen:] = torch.eye(clen)
+        return self.model(batch,
+                          perm_mask=perm_mask,
+                          target_mapping=target_mapping)
+
     def get_representations(self, context, position):
         # Hook for saving the representation
         def extract_representation_hook(module,
