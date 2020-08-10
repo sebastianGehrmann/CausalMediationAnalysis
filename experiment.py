@@ -511,10 +511,17 @@ class Model():
         run one full neuron intervention experiment
         """
 
+        if self.is_txl or self.is_xlnet: bsize = 400 # to avoid GPU memory error
         with torch.no_grad():
             '''
             Compute representations for base terms (one for each side of bias)
             '''
+            if self.is_bert or self.is_distilbert or self.is_roberta or self.is_xlnet:
+                num_alts = intervention.base_strings_tok.shape[0]
+                masks = torch.tensor([self.st_ids[0]]).repeat(num_alts, 1).to(self.device)
+                intervention.base_strings_tok = torch.cat(
+                    (intervention.base_strings_tok, masks), dim=1)
+
             base_representations = self.get_representations(
                 intervention.base_strings_tok[0],
                 intervention.position)
