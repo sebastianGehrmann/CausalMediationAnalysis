@@ -102,13 +102,12 @@ class Model():
 
         self.is_gpt2 = gpt2_version.startswith('gpt2')
         self.is_txl = gpt2_version.startswith('transfo-xl')
+        self.is_xlnet = gpt2_version.startswith('xlnet')
         self.is_bert = gpt2_version.startswith('bert')
         self.is_distilbert = gpt2_version.startswith('distilbert')
         self.is_roberta = gpt2_version.startswith('roberta')
-        self.is_xlnet = gpt2_version.startswith('xlnet')
-        assert (self.is_gpt2 or self.is_txl or
-                self.is_bert or self.is_distilbert or
-                self.is_roberta or self.is_xlnet)
+        assert (self.is_gpt2 or self.is_txl or self.is_xlnet or
+                self.is_bert or self.is_distilbert or self.is_roberta)
 
         self.device = device
         self.model = (GPT2LMHeadModel if self.is_gpt2 else
@@ -135,10 +134,10 @@ class Model():
 
         tokenizer = (GPT2Tokenizer if self.is_gpt2 else
                      TransfoXLTokenizer if self.is_txl else
+                     XLNetTokenizer if self.is_xlnet else
                      BertTokenizer if self.is_bert else
                      DistilBertTokenizer if self.is_distilbert else
-                     RobertaTokenizer if self.is_roberta else
-                     XLNetTokenizer).from_pretrained(gpt2_version)
+                     RobertaTokenizer).from_pretrained(gpt2_version)
         # Special token id's: (mask, cls, sep)
         self.st_ids = (tokenizer.mask_token_id,
                        tokenizer.cls_token_id,
