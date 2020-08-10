@@ -272,22 +272,38 @@ class Model():
         mean_probs = []
         context = context.tolist()
         for candidate in candidates:
-            combined = context + candidate
-            # Exclude last token position when predicting next token
-            batch = torch.tensor(combined[:-1]).unsqueeze(dim=0).to(self.device)
-            # Shape (batch_size, seq_len, vocab_size)
-            logits = self.model(batch)[0]
-            # Shape (seq_len, vocab_size)
-            log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
-            context_end_pos = len(context) - 1
-            continuation_end_pos = context_end_pos + len(candidate)
             token_log_probs = []
-            # TODO: Vectorize this
-            # Up to but not including last token position
-            for i in range(context_end_pos, continuation_end_pos):
-                next_token_id = combined[i+1]
-                next_token_log_prob = log_probs[i][next_token_id].item()
-                token_log_probs.append(next_token_log_prob)
+            if self.is_bert or self.is_distilbert or self.is_roberta:
+                mlm_inputs = self.mlm_inputs(context, candidate)
+                for i, c in enumerate(candidate):
+                    combined, pred_idx = mlm_inputs[i]
+                    batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                    logits = self.model(batch)[0]
+                    log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                    token_log_probs.append(log_probs[pred_idx][c].item())
+            elif self.is_xlnet:
+                combined = context + candidate
+                batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                logits = self.xlnet_forward(batch, clen=len(candidate))[0]
+                log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                for i, next_token_id in enumerate(candidate):
+                    token_log_probs.append(log_probs[i][next_token_id].item())
+            else:
+                combined = context + candidate
+                # Exclude last token position when predicting next token
+                batch = torch.tensor(combined[:-1]).unsqueeze(dim=0).to(self.device)
+                # Shape (batch_size, seq_len, vocab_size)
+                logits = self.model(batch)[0]
+                # Shape (seq_len, vocab_size)
+                log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                context_end_pos = len(context) - 1
+                continuation_end_pos = context_end_pos + len(candidate)
+                # TODO: Vectorize this
+                # Up to but not including last token position
+                for i in range(context_end_pos, continuation_end_pos):
+                    next_token_id = combined[i+1]
+                    next_token_log_prob = log_probs[i][next_token_id].item()
+                    token_log_probs.append(next_token_log_prob)
             mean_token_log_prob = statistics.mean(token_log_probs)
             mean_token_prob = math.exp(mean_token_log_prob)
             mean_probs.append(mean_token_prob)
