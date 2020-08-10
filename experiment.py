@@ -425,27 +425,61 @@ class Model():
         """
 
         def intervention_hook(module, input, outputs, attn_override, attn_override_mask):
-            attention_override_module = AttentionOverride(
+            attention_override_module = (AttentionOverride if self.is_gpt2 else
+                                         TXLAttentionOverride if self.is_txl else
+                                         XLNetAttentionOverride if self.is_xlnet else
+                                         BertAttentionOverride if self.is_bert else
+                                         DistilBertAttentionOverride if self.is_distilbert else
+                                         BertAttentionOverride)(
                 module, attn_override, attn_override_mask)
-            outputs[:] = attention_override_module(*input)
+            return attention_override_module(*input)
 
         with torch.no_grad():
-            hooks = []
-            for d in attn_override_data:
-                attn_override = d['attention_override']
-                attn_override_mask = d['attention_override_mask']
-                layer = d['layer']
-                hooks.append(self.model.transformer.h[layer].attn.register_forward_hook(
-                    partial(intervention_hook,
-                            attn_override=attn_override,
-                            attn_override_mask=attn_override_mask)))
+            if self.is_bert or self.is_distilbert or self.is_roberta:
+                k = 0
+                new_probabilities = []
+                context = context.tolist()
+                for candidate in outputs:
+                    token_log_probs = []
+                    mlm_inputs = self.mlm_inputs(context, candidate)
+                    for i, c in enumerate(candidate):
+                        hooks = []
+                        for d in attn_override_data:
+                            hooks.append(self.attention_layer(d['layer']).register_forward_hook(
+                                partial(intervention_hook,
+                                        attn_override=d['attention_override'][k],
+                                        attn_override_mask=d['attention_override_mask'][k])))
 
-            new_probabilities = self.get_probabilities_for_examples_multitoken(
-                context,
-                outputs)
+                        combined, pred_idx = mlm_inputs[i]
+                        batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                        logits = self.model(batch)[0]
+                        log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                        token_log_probs.append(log_probs[pred_idx][c].item())
 
-            for hook in hooks:
-                hook.remove()
+                        for hook in hooks: hook.remove()
+                        k += 1
+
+                    mean_token_log_prob = statistics.mean(token_log_probs)
+                    mean_token_prob = math.exp(mean_token_log_prob)
+                    new_probabilities.append(mean_token_prob)
+            else:
+                hooks = []
+                for d in attn_override_data:
+                    attn_override = d['attention_override']
+                    attn_override_mask = d['attention_override_mask']
+                    layer = d['layer']
+                    hooks.append(self.attention_layer(layer).register_forward_hook(
+                        partial(intervention_hook,
+                                attn_override=attn_override,
+                                attn_override_mask=attn_override_mask)))
+
+                new_probabilities = self.get_probabilities_for_examples_multitoken(
+                    context,
+                    outputs)
+
+                for hook in hooks:
+                    hook.remove()
+
             return new_probabilities
 
     def neuron_intervention_experiment(self,
