@@ -96,10 +96,27 @@ class Model():
                  device='cpu',
                  output_attentions=False,
                  random_weights=False,
+                 masking_approach=1,
                  gpt2_version='gpt2'):
         super()
+
+        self.is_gpt2 = gpt2_version.startswith('gpt2')
+        self.is_txl = gpt2_version.startswith('transfo-xl')
+        self.is_bert = gpt2_version.startswith('bert')
+        self.is_distilbert = gpt2_version.startswith('distilbert')
+        self.is_roberta = gpt2_version.startswith('roberta')
+        self.is_xlnet = gpt2_version.startswith('xlnet')
+        assert (self.is_gpt2 or self.is_txl or
+                self.is_bert or self.is_distilbert or
+                self.is_roberta or self.is_xlnet)
+
         self.device = device
-        self.model = GPT2LMHeadModel.from_pretrained(
+        self.model = (GPT2LMHeadModel if self.is_gpt2 else
+                      XLNetLMHeadModel if self.is_xlnet else
+                      TransfoXLLMHeadModel if self.is_txl else
+                      BertForMaskedLM if self.is_bert else
+                      DistilBertForMaskedLM if self.is_distilbert else
+                      RobertaForMaskedLM).from_pretrained(
             gpt2_version,
             output_attentions=output_attentions)
         self.model.eval()
@@ -110,12 +127,54 @@ class Model():
 
         # Options
         self.top_k = 5
-        # 12 for GPT-2
-        self.num_layers = len(self.model.transformer.h)
-        # 768 for GPT-2
-        self.num_neurons = self.model.transformer.wte.weight.shape[1]
-        # 12 for GPT-2
-        self.num_heads = self.model.transformer.h[0].attn.n_head
+        self.num_layers = self.model.config.num_hidden_layers
+        self.num_neurons = self.model.config.hidden_size
+        self.num_heads = self.model.config.num_attention_heads
+        self.masking_approach = masking_approach # Used only for masked LMs
+        assert masking_approach in [1, 2, 3, 4, 5, 6]
+
+        tokenizer = (GPT2Tokenizer if self.is_gpt2 else
+                     TransfoXLTokenizer if self.is_txl else
+                     BertTokenizer if self.is_bert else
+                     DistilBertTokenizer if self.is_distilbert else
+                     RobertaTokenizer if self.is_roberta else
+                     XLNetTokenizer).from_pretrained(gpt2_version)
+        # Special token id's: (mask, cls, sep)
+        self.st_ids = (tokenizer.mask_token_id,
+                       tokenizer.cls_token_id,
+                       tokenizer.sep_token_id)
+
+        # To account for switched dimensions in model internals:
+        # Default: [batch_size, seq_len, hidden_dim],
+        # txl and xlnet: [seq_len, batch_size, hidden_dim]
+        self.order_dims = lambda a: a
+
+        if self.is_gpt2:
+            self.attention_layer = lambda layer: self.model.transformer.h[layer].attn
+            self.word_emb_layer = self.model.transformer.wte
+            self.neuron_layer = lambda layer: self.model.transformer.h[layer].mlp
+        elif self.is_txl:
+            self.attention_layer = lambda layer: self.model.transformer.layers[layer].dec_attn
+            self.word_emb_layer = self.model.transformer.word_emb
+            self.neuron_layer = lambda layer: self.model.transformer.layers[layer].pos_ff
+            self.order_dims = lambda a: (a[1], a[0], *a[2:])
+        elif self.is_xlnet:
+            self.attention_layer = lambda layer: self.model.transformer.layer[layer].rel_attn
+            self.word_emb_layer = self.model.transformer.word_embedding
+            self.neuron_layer = lambda layer: self.model.transformer.layer[layer].ff
+            self.order_dims = lambda a: (a[1], a[0], *a[2:])
+        elif self.is_bert:
+            self.attention_layer = lambda layer: self.model.bert.encoder.layer[layer].attention.self
+            self.word_emb_layer = self.model.bert.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.bert.encoder.layer[layer].output
+        elif self.is_distilbert:
+            self.attention_layer = lambda layer: self.model.distilbert.transformer.layer[layer].attention
+            self.word_emb_layer = self.model.distilbert.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.distilbert.transformer.layer[layer].output_layer_norm
+        elif self.is_roberta:
+            self.attention_layer = lambda layer: self.model.roberta.encoder.layer[layer].attention.self
+            self.word_emb_layer = self.model.roberta.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.roberta.encoder.layer[layer].output
 
     def get_representations(self, context, position):
         # Hook for saving the representation
