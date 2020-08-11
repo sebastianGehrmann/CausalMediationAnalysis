@@ -513,7 +513,7 @@ class Model():
         run one full neuron intervention experiment
         """
 
-        # if self.is_txl or self.is_xlnet: bsize = 400 # to avoid GPU memory error
+        if self.is_txl = 32 # to avoid GPU memory error
         with torch.no_grad():
             '''
             Compute representations for base terms (one for each side of bias)
