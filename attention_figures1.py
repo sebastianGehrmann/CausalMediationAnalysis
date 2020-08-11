@@ -242,35 +242,35 @@ def main():
     # return
     #
     # Other models:
-    model_versions = [
-        'transfo-xl-wt103',
-        'xlnet-base-cased',
-        'xlnet-large-cased',
-        'bert-base-uncased',
-        'bert-large-uncased',
-        'distilbert-base-uncased',
-        'roberta-base',
-        'roberta-large',
-    ]
-    for mv in model_versions:
-        filter = 'filtered'
-        split = 'dev'
-        stat = 'bergsma'
-        autoregressive = mv.startswith('transfo-xl') or mv.startswith('xlnet')
-        for ma in [-1] if autoregressive else [1, 2, 3, 4, 5, 6]:
-            # Process winobias
-            fname = (f'winobias_data/attention_intervention_{mv}_{filter}_' +
-                     (f'{split}_{ma}.json' if ma > 0 else f'{split}.json'))
-            with open(fname) as f:
-                suffix = split + (f'_{ma}' if ma > 0 else '')
-                save_figures(json.load(f), 'winobias', mv, filter, suffix)
-            # Process winogender
-            fname = (f'winogender_data/attention_intervention_bergsma_{mv}_' +
-                     (f'{filter}_{ma}.json' if ma > 0 else f'{filter}.json'))
-            with open(fname) as f:
-                suffix = stat + (f'_{ma}' if ma > 0 else '')
-                save_figures(json.load(f), 'winogender', mv, filter, suffix)
-    return
+    # model_versions = [
+    #     'transfo-xl-wt103',
+    #     'xlnet-base-cased',
+    #     'xlnet-large-cased',
+    #     'bert-base-uncased',
+    #     'bert-large-uncased',
+    #     'distilbert-base-uncased',
+    #     'roberta-base',
+    #     'roberta-large',
+    # ]
+    # for mv in model_versions:
+    #     filter = 'filtered'
+    #     split = 'dev'
+    #     stat = 'bergsma'
+    #     autoregressive = mv.startswith('transfo-xl') or mv.startswith('xlnet')
+    #     for ma in [-1] if autoregressive else [1, 2, 3, 4, 5, 6]:
+    #         # Process winobias
+    #         fname = (f'winobias_data/attention_intervention_{mv}_{filter}_' +
+    #                  (f'{split}_{ma}.json' if ma > 0 else f'{split}.json'))
+    #         with open(fname) as f:
+    #             suffix = split + (f'_{ma}' if ma > 0 else '')
+    #             save_figures(json.load(f), 'winobias', mv, filter, suffix)
+    #         # Process winogender
+    #         fname = (f'winogender_data/attention_intervention_bergsma_{mv}_' +
+    #                  (f'{filter}_{ma}.json' if ma > 0 else f'{filter}.json'))
+    #         with open(fname) as f:
+    #             suffix = stat + (f'_{ma}' if ma > 0 else '')
+    #             save_figures(json.load(f), 'winogender', mv, filter, suffix)
+    # return
 
     # Process winobias
     for model_version in model_versions:
