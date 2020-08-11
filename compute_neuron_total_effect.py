@@ -16,13 +16,18 @@ def compute_total_effect(row):
         return row["alt2_effect"] / row["base_c2_effect"]
 
 
-def filtered_mean(df, column_name, profession_stereotypicality):
+def filtered_mean(df, column_name, profession_stereotypicality, model_name):
     """Get the mean effects after excluding strictly definitional professions."""
+
+    def get_profession(s):
+        # Discard PADDING TEXT used in XLNet
+        if model_name.startswith('xlnet'): s = s.split('<eos>')[-1]
+        return s.split()[1]
 
     def get_stereotypicality(vals):
         return abs(profession_stereotypicality[vals]["definitional"])
 
-    df["profession"] = df["base_string"].apply(lambda s: s.split()[1])
+    df["profession"] = df["base_string"].apply(get_profession)
     df["definitional"] = df["profession"].apply(get_stereotypicality)
     return df[df["definitional"] < 0.75][column_name].mean()
 
@@ -77,12 +82,14 @@ def main(folder_name="results/20191114_neuron_intervention/", model_name="distil
         temp_df["total_effect"] = temp_df.apply(compute_total_effect, axis=1)
 
         mean_he_total = filtered_mean(
-            temp_df, "he_total_effect", profession_stereotypicality
+            temp_df, "he_total_effect", profession_stereotypicality, model_name
         )
         mean_she_total = filtered_mean(
-            temp_df, "she_total_effect", profession_stereotypicality
+            temp_df, "she_total_effect", profession_stereotypicality, model_name
         )
-        mean_total = filtered_mean(temp_df, "total_effect", profession_stereotypicality)
+        mean_total = filtered_mean(
+            temp_df, "total_effect", profession_stereotypicality, model_name
+        )
         he_means.append(mean_he_total)
         she_means.append(mean_she_total)
         means.append(mean_total)
@@ -111,7 +118,10 @@ def main(folder_name="results/20191114_neuron_intervention/", model_name="distil
         labels.append(row["base_string"])
         y_vals.append(row["total_effect"])
         x_vals.append(
-            profession_stereotypicality[row["base_string"].split()[1]]["total"]
+            profession_stereotypicality[
+                row["base_string"].split()[1] if not model_name.startswith('xlnet')
+                else row["base_string"].split('<eos>')[-1].split()[1]
+            ]["total"]
         )
     profession_df = pd.DataFrame(
         {"example": labels, "Bias": x_vals, "Total Effect": np.log(y_vals)}

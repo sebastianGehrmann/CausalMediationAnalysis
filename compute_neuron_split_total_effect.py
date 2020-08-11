@@ -40,6 +40,11 @@ def main(folder_name="results/20191114_neuron_intervention/", model_name="distil
     for path in woman_files:
         df = pd.read_csv(path).groupby("base_string").agg("mean").reset_index()
 
+        def get_profession(s):
+            # Discard PADDING TEXT used in XLNet
+            if model_name.startswith('xlnet'): s = s.split('<eos>')[-1]
+            return s.split()[1]
+
         # Set up filtering by stereotypicality
         def get_definitionality(vals):
             return abs(profession_stereotypicality[vals]["definitional"])
@@ -47,7 +52,7 @@ def main(folder_name="results/20191114_neuron_intervention/", model_name="distil
         def get_stereotypicality(vals):
             return profession_stereotypicality[vals]["total"]
 
-        df["profession"] = df["base_string"].apply(lambda s: s.split()[1])
+        df["profession"] = df["base_string"].apply(get_profession)
         df["definitional"] = df["profession"].apply(get_definitionality)
         df["stereotypicality"] = df["profession"].apply(get_stereotypicality)
         """
