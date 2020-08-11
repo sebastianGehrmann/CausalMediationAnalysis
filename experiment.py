@@ -346,7 +346,7 @@ class Model():
                 raise ValueError(f"Invalid intervention_type: {intervention_type}")
             # Overwrite values in the output
             # First define mask where to overwrite
-            scatter_mask = torch.zeros_like(output, dtype=torch.uint8)
+            scatter_mask = torch.zeros_like(output, dtype=torch.bool)
             for i, v in enumerate(neurons):
                 scatter_mask[self.order_dims((i, position, v))] = 1
             # Then take values from base and scatter
@@ -513,7 +513,7 @@ class Model():
         run one full neuron intervention experiment
         """
 
-        if self.is_txl or self.is_xlnet: bsize = 400 # to avoid GPU memory error
+        # if self.is_txl or self.is_xlnet: bsize = 400 # to avoid GPU memory error
         with torch.no_grad():
             '''
             Compute representations for base terms (one for each side of bias)

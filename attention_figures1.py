@@ -138,6 +138,30 @@ def save_figures(data, source, model_version, filter, suffix, k=10):
             elif model_version == 'gpt2-xl':
                 ax1 = plt.subplot2grid((100, 85), (0, 5), colspan=55, rowspan=96)
                 ax2 = plt.subplot2grid((100, 85), (0, 62), colspan=17, rowspan=97)
+            elif model_version == 'transfo-xl-wt103':
+                ax1 = plt.subplot2grid((100, 85), (0, 5), colspan=55, rowspan=96)
+                ax2 = plt.subplot2grid((100, 85), (12, 64), colspan=17, rowspan=72)
+            elif model_version == 'xlnet-base-cased':
+                ax1 = plt.subplot2grid((100, 85), (0, 0), colspan=65, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (12, 70), colspan=15, rowspan=75)
+            elif model_version == 'xlnet-large-cased':
+                ax1 = plt.subplot2grid((100, 85), (0, 5), colspan=55, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (2, 64), colspan=17, rowspan=95)
+            elif model_version == 'bert-base-uncased':
+                ax1 = plt.subplot2grid((100, 85), (0, 0), colspan=65, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (12, 70), colspan=15, rowspan=75)
+            elif model_version == 'bert-large-uncased':
+                ax1 = plt.subplot2grid((100, 85), (0, 5), colspan=55, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (2, 64), colspan=17, rowspan=95)
+            elif model_version == 'distilbert-base-uncased':
+                ax1 = plt.subplot2grid((100, 85), (0, 0), colspan=62, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (32, 69), colspan=17, rowspan=35)
+            elif model_version == 'roberta-base':
+                ax1 = plt.subplot2grid((100, 85), (0, 0), colspan=65, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (12, 70), colspan=15, rowspan=75)
+            elif model_version == 'roberta-large':
+                ax1 = plt.subplot2grid((100, 85), (0, 5), colspan=55, rowspan=99)
+                ax2 = plt.subplot2grid((100, 85), (2, 64), colspan=17, rowspan=95)
             heatmap = sns.heatmap(effect_head, center=0.0, ax=ax1, annot=annot, annot_kws={"size": 9}, fmt=".2f", square=True, cbar=False, linewidth=0.1, linecolor='#D0D0D0',
             cmap = LinearSegmentedColormap.from_list('rg', ["#F14100", "white", "#3D4FC4"], N=256))
             plt.setp(heatmap.get_yticklabels(), fontsize=7)
@@ -216,6 +240,37 @@ def main():
     #     data = json.load(f)
     #     save_figures(data, 'winobias', model_version, filter, split)
     # return
+    #
+    # Other models:
+    model_versions = [
+        'transfo-xl-wt103',
+        'xlnet-base-cased',
+        'xlnet-large-cased',
+        'bert-base-uncased',
+        'bert-large-uncased',
+        'distilbert-base-uncased',
+        'roberta-base',
+        'roberta-large',
+    ]
+    for mv in model_versions:
+        filter = 'filtered'
+        split = 'dev'
+        stat = 'bergsma'
+        autoregressive = mv.startswith('transfo-xl') or mv.startswith('xlnet')
+        for ma in [-1] if autoregressive else [1, 2, 3, 4, 5, 6]:
+            # Process winobias
+            fname = (f'winobias_data/attention_intervention_{mv}_{filter}_' +
+                     (f'{split}_{ma}.json' if ma > 0 else f'{split}.json'))
+            with open(fname) as f:
+                suffix = split + (f'_{ma}' if ma > 0 else '')
+                save_figures(json.load(f), 'winobias', mv, filter, suffix)
+            # Process winogender
+            fname = (f'winogender_data/attention_intervention_bergsma_{mv}_' +
+                     (f'{filter}_{ma}.json' if ma > 0 else f'{filter}.json'))
+            with open(fname) as f:
+                suffix = stat + (f'_{ma}' if ma > 0 else '')
+                save_figures(json.load(f), 'winogender', mv, filter, suffix)
+    return
 
     # Process winobias
     for model_version in model_versions:

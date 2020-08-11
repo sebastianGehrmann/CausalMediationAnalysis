@@ -132,3 +132,4 @@ dmypy.json
 myerrors_*
 myoutput_*
 *_slurm.sh
+results/*
