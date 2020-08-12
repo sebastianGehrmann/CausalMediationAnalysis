@@ -102,7 +102,8 @@ class Model():
                  gpt2_version='gpt2'):
         super()
 
-        self.is_gpt2 = gpt2_version.startswith('gpt2')
+        self.is_gpt2 = (gpt2_version.startswith('gpt2') or
+                        gpt2_version.startswith('distilgpt2'))
         self.is_txl = gpt2_version.startswith('transfo-xl')
         self.is_xlnet = gpt2_version.startswith('xlnet')
         self.is_bert = gpt2_version.startswith('bert')
@@ -513,7 +514,7 @@ class Model():
         run one full neuron intervention experiment
         """
 
-        if self.is_txl: 32 # to avoid GPU memory error
+        if self.is_txl or self.is_xlnet: 32 # to avoid GPU memory error
         with torch.no_grad():
             '''
             Compute representations for base terms (one for each side of bias)
