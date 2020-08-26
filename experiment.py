@@ -9,12 +9,16 @@ import torch.nn.functional as F
 from tqdm import tqdm
 from transformers import (
     GPT2LMHeadModel, GPT2Tokenizer,
-    TransfoXLLMHeadModel, TransfoXLTokenizer,
-    XLNetLMHeadModel, XLNetTokenizer,
+    TransfoXLTokenizer,
+    XLNetTokenizer,
     BertForMaskedLM, BertTokenizer,
-    DistilBertForMaskedLM, DistilBertTokenizer,
+    DistilBertTokenizer,
     RobertaForMaskedLM, RobertaTokenizer
 )
+
+from transformers_modified.modeling_transfo_xl import TransfoXLLMHeadModel
+from transformers_modified.modeling_xlnet import XLNetLMHeadModel
+from transformers_modified.modeling_distilbert import DistilBertForMaskedLM
 
 from attention_intervention_model import (
     AttentionOverride, TXLAttentionOverride, XLNetAttentionOverride,
