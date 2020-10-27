@@ -1,7 +1,7 @@
 numpy
 torch
 tqdm
-transformers
+transformers<3
 fire
 matplotlib
 pandas
