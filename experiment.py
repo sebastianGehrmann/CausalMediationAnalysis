@@ -7,13 +7,40 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from tqdm import tqdm
-from transformers import GPT2LMHeadModel, GPT2Tokenizer
+from transformers import (
+    GPT2LMHeadModel, GPT2Tokenizer,
+    TransfoXLTokenizer,
+    XLNetTokenizer,
+    BertForMaskedLM, BertTokenizer,
+    DistilBertTokenizer,
+    RobertaForMaskedLM, RobertaTokenizer
+)
 
-from attention_intervention_model import AttentionOverride
+from transformers_modified.modeling_transfo_xl import TransfoXLLMHeadModel
+from transformers_modified.modeling_xlnet import XLNetLMHeadModel
+from transformers_modified.modeling_distilbert import DistilBertForMaskedLM
+
+from attention_intervention_model import (
+    AttentionOverride, TXLAttentionOverride, XLNetAttentionOverride,
+    BertAttentionOverride, DistilBertAttentionOverride
+)
 from utils import batch, convert_results_to_pd
 
 np.random.seed(1)
 torch.manual_seed(1)
+
+
+# Padding text for XLNet (from examples/text-generation/run_generation.py)
+PADDING_TEXT = """In 1991, the remains of Russian Tsar Nicholas II and his family
+(except for Alexei and Maria) are discovered.
+The voice of Nicholas's young son, Tsarevich Alexei Nikolaevich, narrates the
+remainder of the story. 1883 Western Siberia,
+a young Grigori Rasputin is asked by his father and a group of men to perform magic.
+Rasputin has a vision and denounces one of the men as a horse thief. Although his
+father initially slaps him for making such an accusation, Rasputin watches as the
+man is chased outside and beaten. Twenty years later, Rasputin sees a vision of
+the Virgin Mary, prompting him to become a priest. Rasputin quickly becomes famous,
+with people, even a bishop, begging for his blessing. <eod> </s> <eos>"""
 
 
 class Intervention():
@@ -29,23 +56,38 @@ class Intervention():
         super()
         self.device = device
         self.enc = tokenizer
+
+        if isinstance(tokenizer, XLNetTokenizer):
+            base_string = PADDING_TEXT + ' ' + base_string
+
         # All the initial strings
         # First item should be neutral, others tainted
         self.base_strings = [base_string.format(s)
                              for s in substitutes]
         # Tokenized bases
-        self.base_strings_tok = [self.enc.encode(s)
-                                 for s in self.base_strings]
+        self.base_strings_tok = [
+            self.enc.encode(s,
+                            add_special_tokens=False,
+                            add_space_before_punct_symbol=True)
+            for s in self.base_strings
+        ]
         # print(self.base_strings_tok)
         self.base_strings_tok = torch.LongTensor(self.base_strings_tok)\
                                      .to(device)
         # Where to intervene
-        self.position = base_string.split().index('{}')
+        if isinstance(tokenizer, XLNetTokenizer):
+            diff = len(base_string.split()) - base_string.split().index('{}')
+            self.position = len(self.base_strings_tok[0]) - diff
+            assert len(self.base_strings_tok[0]) == len(self.base_strings_tok[1])
+        else:
+            self.position = base_string.split().index('{}')
 
         self.candidates = []
         for c in candidates:
-            # '. ' added to input so that tokenizer understand that first word follows a space.
-            tokens = self.enc.tokenize('. ' + c)[1:]
+            # 'a ' added to input so that tokenizer understand that first word follows a space.
+            tokens = self.enc.tokenize(
+                'a ' + c,
+                add_space_before_punct_symbol=True)[1:]
             self.candidates.append(tokens)
 
         self.candidates_tok = [self.enc.convert_tokens_to_ids(tokens)
@@ -60,10 +102,27 @@ class Model():
                  device='cpu',
                  output_attentions=False,
                  random_weights=False,
+                 masking_approach=1,
                  gpt2_version='gpt2'):
         super()
+
+        self.is_gpt2 = (gpt2_version.startswith('gpt2') or
+                        gpt2_version.startswith('distilgpt2'))
+        self.is_txl = gpt2_version.startswith('transfo-xl')
+        self.is_xlnet = gpt2_version.startswith('xlnet')
+        self.is_bert = gpt2_version.startswith('bert')
+        self.is_distilbert = gpt2_version.startswith('distilbert')
+        self.is_roberta = gpt2_version.startswith('roberta')
+        assert (self.is_gpt2 or self.is_txl or self.is_xlnet or
+                self.is_bert or self.is_distilbert or self.is_roberta)
+
         self.device = device
-        self.model = GPT2LMHeadModel.from_pretrained(
+        self.model = (GPT2LMHeadModel if self.is_gpt2 else
+                      XLNetLMHeadModel if self.is_xlnet else
+                      TransfoXLLMHeadModel if self.is_txl else
+                      BertForMaskedLM if self.is_bert else
+                      DistilBertForMaskedLM if self.is_distilbert else
+                      RobertaForMaskedLM).from_pretrained(
             gpt2_version,
             output_attentions=output_attentions)
         self.model.eval()
@@ -74,12 +133,85 @@ class Model():
 
         # Options
         self.top_k = 5
-        # 12 for GPT-2
-        self.num_layers = len(self.model.transformer.h)
-        # 768 for GPT-2
-        self.num_neurons = self.model.transformer.wte.weight.shape[1]
-        # 12 for GPT-2
-        self.num_heads = self.model.transformer.h[0].attn.n_head
+        self.num_layers = self.model.config.num_hidden_layers
+        self.num_neurons = self.model.config.hidden_size
+        self.num_heads = self.model.config.num_attention_heads
+        self.masking_approach = masking_approach # Used only for masked LMs
+        assert masking_approach in [1, 2, 3, 4, 5, 6]
+
+        tokenizer = (GPT2Tokenizer if self.is_gpt2 else
+                     TransfoXLTokenizer if self.is_txl else
+                     XLNetTokenizer if self.is_xlnet else
+                     BertTokenizer if self.is_bert else
+                     DistilBertTokenizer if self.is_distilbert else
+                     RobertaTokenizer).from_pretrained(gpt2_version)
+        # Special token id's: (mask, cls, sep)
+        self.st_ids = (tokenizer.mask_token_id,
+                       tokenizer.cls_token_id,
+                       tokenizer.sep_token_id)
+
+        # To account for switched dimensions in model internals:
+        # Default: [batch_size, seq_len, hidden_dim],
+        # txl and xlnet: [seq_len, batch_size, hidden_dim]
+        self.order_dims = lambda a: a
+
+        if self.is_gpt2:
+            self.attention_layer = lambda layer: self.model.transformer.h[layer].attn
+            self.word_emb_layer = self.model.transformer.wte
+            self.neuron_layer = lambda layer: self.model.transformer.h[layer].mlp
+        elif self.is_txl:
+            self.attention_layer = lambda layer: self.model.transformer.layers[layer].dec_attn
+            self.word_emb_layer = self.model.transformer.word_emb
+            self.neuron_layer = lambda layer: self.model.transformer.layers[layer].pos_ff
+            self.order_dims = lambda a: (a[1], a[0], *a[2:])
+        elif self.is_xlnet:
+            self.attention_layer = lambda layer: self.model.transformer.layer[layer].rel_attn
+            self.word_emb_layer = self.model.transformer.word_embedding
+            self.neuron_layer = lambda layer: self.model.transformer.layer[layer].ff
+            self.order_dims = lambda a: (a[1], a[0], *a[2:])
+        elif self.is_bert:
+            self.attention_layer = lambda layer: self.model.bert.encoder.layer[layer].attention.self
+            self.word_emb_layer = self.model.bert.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.bert.encoder.layer[layer].output
+        elif self.is_distilbert:
+            self.attention_layer = lambda layer: self.model.distilbert.transformer.layer[layer].attention
+            self.word_emb_layer = self.model.distilbert.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.distilbert.transformer.layer[layer].output_layer_norm
+        elif self.is_roberta:
+            self.attention_layer = lambda layer: self.model.roberta.encoder.layer[layer].attention.self
+            self.word_emb_layer = self.model.roberta.embeddings.word_embeddings
+            self.neuron_layer = lambda layer: self.model.roberta.encoder.layer[layer].output
+
+    def mlm_inputs(self, context, candidate):
+        """ Return input_tokens for the masked LM sampling scheme """
+        input_tokens = []
+        for i in range(len(candidate)):
+            combined = context + candidate[:i] + [self.st_ids[0]]
+            if self.masking_approach in [2, 5]:
+                combined = combined + candidate[i+1:]
+            elif self.masking_approach in [3, 6]:
+                combined = combined + [self.st_ids[0]] * len(candidate[i+1:])
+            if self.masking_approach > 3:
+                combined = [self.st_ids[1]] + combined + [self.st_ids[2]]
+            pred_idx = combined.index(self.st_ids[0])
+            input_tokens.append((combined, pred_idx))
+        return input_tokens
+
+    def xlnet_forward(self, batch, clen):
+        """ Return the outputs of XLNet's forward pass;
+            clen = length of the candidate """
+        bsz, seqlen = batch.shape
+        perm_mask = torch.triu(
+            torch.ones((bsz, seqlen, seqlen), device=self.device), diagonal=0)
+        perm_mask[:, :, :-clen] = 0
+        if self.masking_approach == 2:
+            perm_mask[:, -clen:, -clen:] = torch.eye(clen)
+        target_mapping = torch.zeros(
+            (bsz, clen, seqlen), dtype=torch.float, device=self.device)
+        target_mapping[:, :, -clen:] = torch.eye(clen)
+        return self.model(batch,
+                          perm_mask=perm_mask,
+                          target_mapping=target_mapping)
 
     def get_representations(self, context, position):
         # Hook for saving the representation
@@ -89,26 +221,30 @@ class Model():
                                         position,
                                         representations,
                                         layer):
-            representations[layer] = output[0][position]
+            # XLNet: ignore the query stream
+            if self.is_xlnet and output.shape[0] == 1: return output
+            representations[layer] = output[self.order_dims((0, position))]
         handles = []
         representation = {}
         with torch.no_grad():
             # construct all the hooks
             # word embeddings will be layer -1
-            handles.append(self.model.transformer.wte.register_forward_hook(
-                    partial(extract_representation_hook,
-                            position=position,
-                            representations=representation,
-                            layer=-1)))
+            handles.append(self.word_emb_layer.register_forward_hook(
+                partial(extract_representation_hook,
+                        position=position,
+                        representations=representation,
+                        layer=-1)))
             # hidden layers
             for layer in range(self.num_layers):
-                handles.append(self.model.transformer.h[layer]\
-                                   .mlp.register_forward_hook(
+                handles.append(self.neuron_layer(layer).register_forward_hook(
                     partial(extract_representation_hook,
                             position=position,
                             representations=representation,
                             layer=layer)))
-            logits, past = self.model(context)
+            if self.is_xlnet:
+                self.xlnet_forward(context.unsqueeze(0), clen=1)
+            else:
+                self.model(context.unsqueeze(0))
             for h in handles:
                 h.remove()
         # print(representation[0][:5])
@@ -120,7 +256,10 @@ class Model():
             if len(c) > 1:
                 raise ValueError(f"Multiple tokens not allowed: {c}")
         outputs = [c[0] for c in candidates]
-        logits, past = self.model(context)[:2]
+        if self.is_xlnet:
+            logits = self.xlnet_forward(context, clen=1)[0]
+        else:
+            logits = self.model(context)[0]
         logits = logits[:, -1, :]
         probs = F.softmax(logits, dim=-1)
         return probs[:, outputs].tolist()
@@ -140,22 +279,38 @@ class Model():
         mean_probs = []
         context = context.tolist()
         for candidate in candidates:
-            combined = context + candidate
-            # Exclude last token position when predicting next token
-            batch = torch.tensor(combined[:-1]).unsqueeze(dim=0).to(self.device)
-            # Shape (batch_size, seq_len, vocab_size)
-            logits = self.model(batch)[0]
-            # Shape (seq_len, vocab_size)
-            log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
-            context_end_pos = len(context) - 1
-            continuation_end_pos = context_end_pos + len(candidate)
             token_log_probs = []
-            # TODO: Vectorize this
-            # Up to but not including last token position
-            for i in range(context_end_pos, continuation_end_pos):
-                next_token_id = combined[i+1]
-                next_token_log_prob = log_probs[i][next_token_id].item()
-                token_log_probs.append(next_token_log_prob)
+            if self.is_bert or self.is_distilbert or self.is_roberta:
+                mlm_inputs = self.mlm_inputs(context, candidate)
+                for i, c in enumerate(candidate):
+                    combined, pred_idx = mlm_inputs[i]
+                    batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                    logits = self.model(batch)[0]
+                    log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                    token_log_probs.append(log_probs[pred_idx][c].item())
+            elif self.is_xlnet:
+                combined = context + candidate
+                batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                logits = self.xlnet_forward(batch, clen=len(candidate))[0]
+                log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                for i, next_token_id in enumerate(candidate):
+                    token_log_probs.append(log_probs[i][next_token_id].item())
+            else:
+                combined = context + candidate
+                # Exclude last token position when predicting next token
+                batch = torch.tensor(combined[:-1]).unsqueeze(dim=0).to(self.device)
+                # Shape (batch_size, seq_len, vocab_size)
+                logits = self.model(batch)[0]
+                # Shape (seq_len, vocab_size)
+                log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                context_end_pos = len(context) - 1
+                continuation_end_pos = context_end_pos + len(candidate)
+                # TODO: Vectorize this
+                # Up to but not including last token position
+                for i in range(context_end_pos, continuation_end_pos):
+                    next_token_id = combined[i+1]
+                    next_token_log_prob = log_probs[i][next_token_id].item()
+                    token_log_probs.append(next_token_log_prob)
             mean_token_log_prob = statistics.mean(token_log_probs)
             mean_token_prob = math.exp(mean_token_log_prob)
             mean_probs.append(mean_token_prob)
@@ -178,12 +333,14 @@ class Model():
                               neurons,
                               intervention,
                               intervention_type):
+            # XLNet: ignore the query stream
+            if self.is_xlnet and output.shape[0] == 1: return output
             # Get the neurons to intervene on
             neurons = torch.LongTensor(neurons).to(self.device)
             # First grab the position across batch
             # Then, for each element, get correct index w/ gather
-            base = output[:, position, :].gather(
-                1, neurons)
+            base_slice = self.order_dims((slice(None), position, slice(None)))
+            base = output[base_slice].gather(1, neurons)
             intervention_view = intervention.view_as(base)
 
             if intervention_type == 'replace':
@@ -194,9 +351,9 @@ class Model():
                 raise ValueError(f"Invalid intervention_type: {intervention_type}")
             # Overwrite values in the output
             # First define mask where to overwrite
-            scatter_mask = torch.zeros_like(output).byte()
+            scatter_mask = torch.zeros_like(output, dtype=torch.bool)
             for i, v in enumerate(neurons):
-                scatter_mask[i, position, v] = 1
+                scatter_mask[self.order_dims((i, position, v))] = 1
             # Then take values from base and scatter
             output.masked_scatter_(scatter_mask, base.flatten())
 
@@ -205,34 +362,31 @@ class Model():
         context = context.unsqueeze(0).repeat(batch_size, 1)
         handle_list = []
         for layer in set(layers):
-          neuron_loc = np.where(np.array(layers) == layer)[0]
-          n_list = []
-          for n in neurons:
-            unsorted_n_list = [n[i] for i in neuron_loc]
-            n_list.append(list(np.sort(unsorted_n_list)))
-          intervention_rep = alpha * rep[layer][n_list]
-          if layer == -1:
-              wte_intervention_handle = self.model.transformer.wte.register_forward_hook(
-                  partial(intervention_hook,
-                          position=position,
-                          neurons=n_list,
-                          intervention=intervention_rep,
-                          intervention_type=intervention_type))
-              handle_list.append(wte_intervention_handle)
-          else:
-              mlp_intervention_handle = self.model.transformer.h[layer]\
-                                            .mlp.register_forward_hook(
-                  partial(intervention_hook,
-                          position=position,
-                          neurons=n_list,
-                          intervention=intervention_rep,
-                          intervention_type=intervention_type))
-              handle_list.append(mlp_intervention_handle)
+            neuron_loc = np.where(np.array(layers) == layer)[0]
+            n_list = []
+            for n in neurons:
+                unsorted_n_list = [n[i] for i in neuron_loc]
+                n_list.append(list(np.sort(unsorted_n_list)))
+            intervention_rep = alpha * rep[layer][n_list]
+            if layer == -1:
+                handle_list.append(self.word_emb_layer.register_forward_hook(
+                    partial(intervention_hook,
+                            position=position,
+                            neurons=n_list,
+                            intervention=intervention_rep,
+                            intervention_type=intervention_type)))
+            else:
+                handle_list.append(self.neuron_layer(layer).register_forward_hook(
+                    partial(intervention_hook,
+                            position=position,
+                            neurons=n_list,
+                            intervention=intervention_rep,
+                            intervention_type=intervention_type)))
         new_probabilities = self.get_probabilities_for_examples(
             context,
             outputs)
         for hndle in handle_list:
-          hndle.remove()
+            hndle.remove()
         return new_probabilities
 
     def head_pruning_intervention(self,
@@ -278,27 +432,61 @@ class Model():
         """
 
         def intervention_hook(module, input, outputs, attn_override, attn_override_mask):
-            attention_override_module = AttentionOverride(
+            attention_override_module = (AttentionOverride if self.is_gpt2 else
+                                         TXLAttentionOverride if self.is_txl else
+                                         XLNetAttentionOverride if self.is_xlnet else
+                                         BertAttentionOverride if self.is_bert else
+                                         DistilBertAttentionOverride if self.is_distilbert else
+                                         BertAttentionOverride)(
                 module, attn_override, attn_override_mask)
-            outputs[:] = attention_override_module(*input)
+            return attention_override_module(*input)
 
         with torch.no_grad():
-            hooks = []
-            for d in attn_override_data:
-                attn_override = d['attention_override']
-                attn_override_mask = d['attention_override_mask']
-                layer = d['layer']
-                hooks.append(self.model.transformer.h[layer].attn.register_forward_hook(
-                    partial(intervention_hook,
-                            attn_override=attn_override,
-                            attn_override_mask=attn_override_mask)))
+            if self.is_bert or self.is_distilbert or self.is_roberta:
+                k = 0
+                new_probabilities = []
+                context = context.tolist()
+                for candidate in outputs:
+                    token_log_probs = []
+                    mlm_inputs = self.mlm_inputs(context, candidate)
+                    for i, c in enumerate(candidate):
+                        hooks = []
+                        for d in attn_override_data:
+                            hooks.append(self.attention_layer(d['layer']).register_forward_hook(
+                                partial(intervention_hook,
+                                        attn_override=d['attention_override'][k],
+                                        attn_override_mask=d['attention_override_mask'][k])))
 
-            new_probabilities = self.get_probabilities_for_examples_multitoken(
-                context,
-                outputs)
+                        combined, pred_idx = mlm_inputs[i]
+                        batch = torch.tensor(combined).unsqueeze(dim=0).to(self.device)
+                        logits = self.model(batch)[0]
+                        log_probs = F.log_softmax(logits[-1, :, :], dim=-1)
+                        token_log_probs.append(log_probs[pred_idx][c].item())
 
-            for hook in hooks:
-                hook.remove()
+                        for hook in hooks: hook.remove()
+                        k += 1
+
+                    mean_token_log_prob = statistics.mean(token_log_probs)
+                    mean_token_prob = math.exp(mean_token_log_prob)
+                    new_probabilities.append(mean_token_prob)
+            else:
+                hooks = []
+                for d in attn_override_data:
+                    attn_override = d['attention_override']
+                    attn_override_mask = d['attention_override_mask']
+                    layer = d['layer']
+                    hooks.append(self.attention_layer(layer).register_forward_hook(
+                        partial(intervention_hook,
+                                attn_override=attn_override,
+                                attn_override_mask=attn_override_mask)))
+
+                new_probabilities = self.get_probabilities_for_examples_multitoken(
+                    context,
+                    outputs)
+
+                for hook in hooks:
+                    hook.remove()
+
             return new_probabilities
 
     def neuron_intervention_experiment(self,
@@ -330,10 +518,17 @@ class Model():
         run one full neuron intervention experiment
         """
 
+        if self.is_txl or self.is_xlnet: 32 # to avoid GPU memory error
         with torch.no_grad():
             '''
             Compute representations for base terms (one for each side of bias)
             '''
+            if self.is_bert or self.is_distilbert or self.is_roberta or self.is_xlnet:
+                num_alts = intervention.base_strings_tok.shape[0]
+                masks = torch.tensor([self.st_ids[0]]).repeat(num_alts, 1).to(self.device)
+                intervention.base_strings_tok = torch.cat(
+                    (intervention.base_strings_tok, masks), dim=1)
+
             base_representations = self.get_representations(
                 intervention.base_strings_tok[0],
                 intervention.position)
@@ -471,15 +666,29 @@ class Model():
             input = x  # Get attention for x
         else:
             raise ValueError(f"Invalid effect: {effect}")
-        batch = torch.tensor(input).unsqueeze(0).to(self.device)
-        attention_override = self.model(batch)[-1]
+        if self.is_bert or self.is_distilbert or self.is_roberta:
+            attention_override = []
+            input = input.tolist()
+            for candidate in intervention.candidates_tok:
+                mlm_inputs = self.mlm_inputs(input, candidate)
+                for i, c in enumerate(candidate):
+                    combined, _ = mlm_inputs[i]
+                    batch = torch.tensor(combined).unsqueeze(0).to(self.device)
+                    attention_override.append(self.model(batch)[-1])
+        elif self.is_xlnet:
+            batch = input.clone().detach().unsqueeze(0).to(self.device)
+            target_mapping = torch.zeros(
+                (1, 1, len(input)), dtype=torch.float, device=self.device)
+            attention_override = self.model(
+                batch, target_mapping=target_mapping)[-1]
+        else:
+            batch = input.clone().detach().unsqueeze(0).to(self.device)
+            attention_override = self.model(batch)[-1]
 
         batch_size = 1
         seq_len = len(x)
         seq_len_alt = len(x_alt)
         assert seq_len == seq_len_alt
-        assert len(attention_override) == self.num_layers
-        assert attention_override[0].shape == (batch_size, self.num_heads, seq_len, seq_len)
 
         with torch.no_grad():
 
@@ -496,8 +705,15 @@ class Model():
             # Intervene at every layer and head by overlaying attention induced by x_alt
             model_attn_override_data = [] # Save layer interventions for model-level intervention later
             for layer in range(self.num_layers):
-                layer_attention_override = attention_override[layer]
-                attention_override_mask = torch.ones_like(layer_attention_override, dtype=torch.uint8)
+                if self.is_bert or self.is_distilbert or self.is_roberta:
+                    layer_attention_override = [a[layer] for a in attention_override]
+                    attention_override_mask = [torch.ones_like(l, dtype=torch.uint8) for l in layer_attention_override]
+                elif self.is_xlnet:
+                    layer_attention_override = attention_override[layer]
+                    attention_override_mask = torch.ones_like(layer_attention_override[0], dtype=torch.uint8)
+                else:
+                    layer_attention_override = attention_override[layer]
+                    attention_override_mask = torch.ones_like(layer_attention_override, dtype=torch.uint8)
                 layer_attn_override_data = [{
                     'layer': layer,
                     'attention_override': layer_attention_override,
@@ -509,8 +725,16 @@ class Model():
                     attn_override_data = layer_attn_override_data)
                 model_attn_override_data.extend(layer_attn_override_data)
                 for head in range(self.num_heads):
-                    attention_override_mask = torch.zeros_like(layer_attention_override, dtype=torch.uint8)
-                    attention_override_mask[0][head] = 1 # Set mask to 1 for single head only
+                    if self.is_bert or self.is_distilbert or self.is_roberta:
+                        attention_override_mask = [torch.zeros_like(l, dtype=torch.uint8)
+                                                   for l in layer_attention_override]
+                        for a in attention_override_mask: a[0][head] = 1
+                    elif self.is_xlnet:
+                        attention_override_mask = torch.zeros_like(layer_attention_override[0], dtype=torch.uint8)
+                        attention_override_mask[0][head] = 1
+                    else:
+                        attention_override_mask = torch.zeros_like(layer_attention_override, dtype=torch.uint8)
+                        attention_override_mask[0][head] = 1 # Set mask to 1 for single head only
                     head_attn_override_data = [{
                         'layer': layer,
                         'attention_override': layer_attention_override,

@@ -4,7 +4,10 @@ import json
 
 import fire
 from pandas import DataFrame
-from transformers import GPT2Tokenizer
+from transformers import (
+    GPT2Tokenizer, TransfoXLTokenizer, XLNetTokenizer,
+    BertTokenizer, DistilBertTokenizer, RobertaTokenizer
+)
 
 import winogender
 from attention_utils import perform_interventions, get_odds_ratio
@@ -14,7 +17,7 @@ from experiment import Model
 def get_interventions_winogender(gpt2_version, do_filter, stat, model, tokenizer,
                                 device='cuda', filter_quantile=0.25):
     examples = winogender.load_examples()
-    
+
     json_data = {'model_version': gpt2_version,
             'do_filter': do_filter,
             'stat': stat,
@@ -42,9 +45,18 @@ def get_interventions_winogender(gpt2_version, do_filter, stat, model, tokenizer
     interventions = [ex.to_intervention(tokenizer, stat) for ex in examples]
     return interventions, json_data
 
-def intervene_attention(gpt2_version, do_filter, stat, device='cuda', filter_quantile=0.25, random_weights=False):
-    model = Model(output_attentions=True, gpt2_version=gpt2_version, device=device, random_weights=random_weights)
-    tokenizer = GPT2Tokenizer.from_pretrained(gpt2_version)
+def intervene_attention(gpt2_version, do_filter, stat, device='cuda',
+                        filter_quantile=0.25, random_weights=False,
+                        masking_approach=1):
+    model = Model(output_attentions=True, gpt2_version=gpt2_version,
+                  device=device, random_weights=random_weights,
+                  masking_approach=masking_approach)
+    tokenizer = (GPT2Tokenizer if model.is_gpt2 else
+                 TransfoXLTokenizer if model.is_txl else
+                 XLNetTokenizer if model.is_xlnet else
+                 BertTokenizer if model.is_bert else
+                 DistilBertTokenizer if model.is_distilbert else
+                 RobertaTokenizer).from_pretrained(gpt2_version)
 
     interventions, json_data = get_interventions_winogender(gpt2_version, do_filter, stat, model, tokenizer,
                                                             device, filter_quantile)
@@ -55,7 +67,10 @@ def intervene_attention(gpt2_version, do_filter, stat, device='cuda', filter_qua
     filter_name = 'filtered' if do_filter else 'unfiltered'
     if random_weights:
         gpt2_version += '_random'
-    fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
+    if model.is_gpt2 or model.is_txl or model.is_xlnet:
+        fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}.json"
+    else:
+        fname = f"winogender_data/attention_intervention_{stat}_{gpt2_version}_{filter_name}_{masking_approach}.json"
     json_data['results'] = results
     with open(fname, 'w') as f:
         json.dump(json_data, f)
@@ -63,4 +78,3 @@ def intervene_attention(gpt2_version, do_filter, stat, device='cuda', filter_qua
 
 if __name__ == "__main__":
     fire.Fire(intervene_attention)
-

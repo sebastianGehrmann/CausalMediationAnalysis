@@ -5,7 +5,10 @@ import os
 from datetime import datetime
 
 import torch
-from transformers import GPT2Tokenizer
+from transformers import (
+    GPT2Tokenizer, TransfoXLTokenizer, XLNetTokenizer,
+    BertTokenizer, DistilBertTokenizer, RobertaTokenizer
+)
 
 from experiment import Intervention, Model
 from utils import convert_results_to_pd
@@ -123,8 +126,13 @@ def run_all(
     templates = get_template_list(template_indices)
     intervention_types = get_intervention_types()
     # Initialize Model and Tokenizer.
-    tokenizer = GPT2Tokenizer.from_pretrained(model_type)
     model = Model(device=device, gpt2_version=model_type, random_weights=random_weights)
+    tokenizer = (GPT2Tokenizer if model.is_gpt2 else
+                 TransfoXLTokenizer if model.is_txl else
+                 XLNetTokenizer if model.is_xlnet else
+                 BertTokenizer if model.is_bert else
+                 DistilBertTokenizer if model.is_distilbert else
+                 RobertaTokenizer).from_pretrained(model_type)
 
     # Set up folder if it does not exist.
     dt_string = datetime.now().strftime("%Y%m%d")
